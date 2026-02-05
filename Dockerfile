@@ -19,4 +19,4 @@ COPY . .
 RUN uv sync --frozen
 
 # Set the entrypoint
-CMD ["uv", "run", "main.py"]
+ENTRYPOINT ["uv", "run", "main.py"]

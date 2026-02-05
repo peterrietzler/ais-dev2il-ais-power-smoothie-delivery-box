@@ -34,4 +34,4 @@ COPY smoothies ./smoothies
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Set the entrypoint
-CMD ["python", "main.py"]
+ENTRYPOINT ["python", "main.py"]
