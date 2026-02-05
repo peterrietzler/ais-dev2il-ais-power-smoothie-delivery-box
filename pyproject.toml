@@ -1,0 +1,16 @@
+[project]
+name = "ais-dev2il-ais-power-smoothie-cook"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.3.1",
+    "pyjokes>=0.8.3",
+    "rich>=14.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4"
+]

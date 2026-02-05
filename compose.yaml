@@ -1,0 +1,9 @@
+services:
+  recipe-server:
+    image: python:3.13-slim
+    command: python -m http.server 8000
+    working_dir: /recipes
+    volumes:
+      - ./smoothie-database:/recipes
+    ports:
+      - "8000:8000"
