@@ -119,3 +119,5 @@ jobs:
             ghcr.io/${{ github.repository }}:v${{ github.run_number }}
           build-args: |
             PYTHON_VERSION=${{ steps.python-version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
