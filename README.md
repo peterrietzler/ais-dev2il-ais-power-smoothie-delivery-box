@@ -595,3 +595,530 @@ You're ready to start working with real applications in containers!
 
 💡 You can use either container names or IDs with most commands.
 
+## Building Our First Image 🧱
+
+So far we've been using images that others have built (hello-world, busybox, rancher/cowsay).
+Now it's time to build our own! We'll start with something very simple.
+
+We have prepared a file called `Dockerfile_Helloworld`. Let's look at it:
+
+```dockerfile
+FROM alpine:latest
+ENTRYPOINT ["echo"]
+CMD ["Hello Docker World"]
+```
+
+**What does this mean?**
+* `FROM alpine:latest`: Start with a lightweight Linux base image (Alpine).
+* `ENTRYPOINT ["echo"]`: This image is designed to run the `echo` command.
+* `CMD ["Hello Docker World"]`: If no arguments are provided, use this default message.
+
+Let's turn this recipe into an actual image. We'll tag it with the name `ais-hello-world`.
+
+```bash
+docker build -t ais-hello-world -f Dockerfile_Helloworld .
+```
+
+* `-t ais-hello-world`: Give the image a name (tag).
+* `-f Dockerfile_Helloworld`: Use our specific file (default is `Dockerfile`).
+* `.`: Look for files in the current directory (context).
+
+Now run our newly crafted image:
+
+```bash
+docker run ais-hello-world
+```
+
+You should see:
+`Hello Docker World`
+
+
+Because we used `ENTRYPOINT` and `CMD`, we can override the message by passing arguments!
+
+```bash
+docker run ais-hello-world "I am a Docker Master"
+```
+
+You should see:
+`I am a Docker Master`
+
+**Why did that happen?**
+When you provide arguments after the image name, they replace the `CMD` part but keep the `ENTRYPOINT`.
+So effectively, Docker ran: `echo "I am a Docker Master"` instead of `echo "Hello Docker World"`.
+
+## Smoothies in a Box 📦
+
+Now for the real deal. We're going to containerize our Power Smoothie Maker application.
+
+Create a new file named `Dockerfile` (no extension) in your project root. We'll build it piece by piece.
+
+Paste these commands line by line:
+
+```dockerfile
+FROM debian:bookworm-slim
+```
+
+We're using Debian 12 (Bookworm) as our OS. "slim" means it's stripped down to save space. 
+It's like buying an unfurnished apartment.
+
+🛡️**Security Bonus:** A smaller image also means better security! Fewer installed packages mean 
+fewer potential vulnerabilities (a smaller "attack surface") that hackers can exploit.
+
+```dockerfile
+# Set the working directory
+WORKDIR /app
+```
+
+This creates a directory called `/app` inside the container and moves us into it. 
+All future commands will run here. It's like doing `mkdir /app` and `cd /app` in one go.
+
+**Installing Tools**
+
+We need `uv` to manage our Python dependencies. But first, we need `curl` to download it. Add these lines:
+
+```dockerfile
+# Install curl and ca-certificates to be able to download uv
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
+```
+
+This updates the package manager list, installs `curl` (for downloading) and `ca-certificates` (for secure connections), 
+and then immediately cleans up the cache to keep the image small.
+
+Now install `uv` and add it to the path:
+
+```dockerfile
+# Install uv
+RUN curl -Ls https://astral.sh/uv/install.sh | sh
+# Add uv to PATH
+ENV PATH="/root/.local/bin:$PATH"
+```
+
+We download and run the installer script for `uv`, then update the `PATH` environment variable 
+so the system knows where to find the `uv` executable. Remember that you've done exactly the same 
+in our last sessions when we've installed `uv` on our machines ? 
+
+**Bringing in the Code**
+
+Now let's get our application files into the container.
+
+```dockerfile
+# Copy the application code
+COPY . .
+```
+
+This copies **everything** from your current folder on your computer (the first `.`) into the current folder 
+inside the image (the second `.`, which is `/app`).
+
+**Installing Dependencies**
+
+We have the code, but we need the Python libraries.
+
+```dockerfile
+# Install dependencies
+RUN uv sync --frozen
+```
+
+`uv` reads our `uv.lock` file and installs exactly the versions of the libraries we need. 
+`--frozen` ensures it doesn't try to update them, ensuring reproducibility. Remember that 
+you've done exactly the same in our last sessions when built our CI pipeline ?
+
+**The Launch Command**
+
+Finally, tell Docker what to do when the container starts.
+
+```dockerfile
+# Set the entrypoint
+ENTRYPOINT ["uv", "run", "main.py"]
+```
+
+This tells Docker: "When you start, execute `uv run main.py`". You should actually be very
+familiar with this command after our previous sessions 😉!
+
+### Build and Run
+
+Now let's build the image for our smoothie maker!
+
+```bash
+docker build -t ais-smoothie-maker .
+```
+
+And run it:
+
+```bash
+docker run --rm ais-smoothie-maker berry_blast.txt
+```
+
+⚠️ The smoothie maker was changed for this session in order to require the name of the recipe file 
+in the `./smoothies` directory as an argument. Therefore you have to pass `berry_blast.txt` to it.
+
+### 🚀 Level Up
+
+Finished early? Let's explore what's actually inside your container image!
+
+#### Challenge: The Hidden Bloat
+
+Let's peek inside the container we just built and see what files were copied.
+
+First, start a shell inside the container:
+
+```bash
+docker run -it --rm ais-smoothie-maker sh
+```
+
+Wait... the container starts and exits immediately! That's because we set `ENTRYPOINT` to run `main.py`. We need to override it.
+
+```bash
+docker run -it --rm --entrypoint sh ais-smoothie-maker
+```
+
+Now you're inside! Let's explore:
+
+```sh
+ls -la
+```
+
+😱 Look at all those files! You'll see:
+- `.git` - The entire Git history (we don't need this in production!)
+- `__pycache__` - Python cache files (generated at runtime anyway)
+- `.idea` - Your IDE settings (definitely not needed)
+- `README.md` - Documentation (not needed to run the app)
+- `test_*.py` - Test files (not needed in production)
+- Maybe even `.DS_Store` if you're on Mac
+
+**Why is this a problem?**
+- 📦 **Larger images** = Slower downloads and deployments
+- 🔒 **Security risk** = More files mean more potential vulnerabilities or leaked secrets
+- 💾 **Waste** = Storing and transferring unnecessary data
+
+Exit the container:
+
+```sh
+exit
+```
+
+**The Solution: `.dockerignore`**
+
+Just like `.gitignore` tells Git which files to ignore, `.dockerignore` tells Docker which files NOT to copy!
+
+Create a file called `.dockerignore` in your project root with this content:
+
+```
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+.pytest_cache/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+work/
+tmp/
+TODO
+README.md
+test_*.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+Dockerfile*
+```
+
+**What does this do?**
+- Excludes Python cache and virtual environments
+- Keeps Git history out of the image
+- Removes IDE configuration files
+- Blocks test files from production
+- Filters out OS-specific junk files
+
+Now rebuild the image:
+
+```bash
+docker build -t ais-smoothie-maker .
+```
+
+And inspect it again:
+
+```bash
+docker run -it --rm --entrypoint sh ais-smoothie-maker
+ls -la
+```
+
+🎉 Much cleaner! Only the essential files made it into the container.
+
+💡 **Best Practice:** Always create a `.dockerignore` file for your Docker projects, just like 
+you create a `.gitignore` for Git!  
+
+## Production Ready Smoothies in a Box 📦
+
+Our first Dockerfile works, but it's not optimized for production. 
+Let's build a better version using **multi-stage builds**.
+
+**What's the problem with our current Dockerfile?**
+- We install `curl` and `ca-certificates` just to download `uv`, but we don't need them at runtime
+- The final image contains build tools we don't need in production
+- The image is larger than it needs to be
+
+**The solution: Multi-stage builds!**
+
+Multi-stage builds let us:
+1. Use one stage to **build** and install everything
+2. Use a second stage for **runtime** that only contains what's needed to run the app
+3. Copy just the compiled/installed artifacts from the builder stage
+
+Let's create `Dockerfile_Clean`. We'll build it step by step.
+
+**Build Arguments**
+
+Start with a build argument so we can easily change the Python version:
+
+```dockerfile
+ARG PYTHON_VERSION=3.13
+```
+
+This creates a variable we can use throughout the Dockerfile. The variable can also be 
+set when we execute `docker build`, which will come in quite handy later.
+
+**The Builder Stage**
+
+This stage will install dependencies.
+
+```dockerfile
+# Builder stage: Install dependencies
+FROM python:${PYTHON_VERSION}-slim AS builder
+```
+
+We're starting the first stage called "builder". 
+The `AS builder` names this stage so we can reference it later. 
+We use the Python version from our argument.
+
+Set up the working directory:
+
+```dockerfile
+WORKDIR /app
+```
+
+Install tools we need to build:
+
+```dockerfile
+# Install curl for uv
+RUN apt-get update && apt-get install -y curl
+```
+
+We still need `curl` to download `uv`. 
+Notice we don't install `ca-certificates` here because the Python image already includes them!
+We also do not clean up anymore because this is a builder stage - we will discard it later anyway.
+
+Install `uv`:
+
+```dockerfile
+# Install uv
+RUN curl -Ls https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+```
+
+Now here's something different - copy only the files needed for dependency installation:
+
+```dockerfile
+# Copy project files needed for dependency installation
+COPY pyproject.toml uv.lock .python-version ./
+```
+
+We're NOT copying everything! We only copy the files that define our dependencies. 
+This enables better **layer caching** - if our code changes but dependencies don't, 
+Docker can reuse this layer, which leads to way faster builds!
+
+Install dependencies:
+
+```dockerfile
+# Install dependencies (creates .venv with Python and packages)
+RUN uv sync --frozen
+```
+
+**The Runtime Stage**
+
+Now for the magic - the second stage that creates our final, lean image:
+
+```dockerfile
+# Runtime stage: Clean image with only runtime dependencies
+FROM python:${PYTHON_VERSION}-slim
+```
+
+We start fresh with a clean Python image. This stage won't have `curl` or any build tools!
+
+```dockerfile
+WORKDIR /app
+```
+
+Copy the installed Python environment from the builder stage:
+
+```dockerfile
+# Copy Python environment and application from builder
+COPY --from=builder /app/.venv /app/.venv
+```
+
+The magic line! `--from=builder` copies files from the first stage. We get the fully 
+installed Python environment without any of the build tools.
+
+Copy only the application code we need:
+
+```dockerfile
+# Copy application code
+COPY main.py ./
+COPY smoothies ./smoothies
+```
+
+We're selective - only copy the files needed to run the app. No tests, no docs, no Git history!
+
+Set the entrypoint:
+
+```dockerfile
+# Set the entrypoint
+ENTRYPOINT ["/app/.venv/bin/python", "main.py"]
+```
+
+Note that we use the `python` which was installed by `uv` into our virtual environment 
+with all dependencies installed.
+
+### Build and Compare
+
+Build the production-ready image:
+
+```bash
+docker build -t ais-smoothie-maker-clean -f Dockerfile_Clean .
+```
+
+Let's compare the two images:
+
+```bash
+docker images | grep ais-smoothie-maker
+```
+
+You should see `ais-smoothie-maker-clean` is smaller! 
+
+Test that it works:
+
+```bash
+docker run --rm ais-smoothie-maker-clean berry_blast.txt
+```
+
+### Inspect the Clean Image
+
+Let's see how lean this image is:
+
+```bash
+docker run -it --rm --entrypoint sh ais-smoothie-maker-clean
+```
+
+Inside the container:
+
+```sh
+ls -la
+which curl
+```
+
+Notice:
+- Only `main.py` and `smoothies/` directory are present
+- `curl` is not found (we don't need it at runtime!)
+- The `.venv` contains just what we need
+
+Exit:
+
+```sh
+exit
+```
+
+**Why is this better?**
+- ⚡ **Smaller image** = Faster deployments
+- 🔒 **More secure** = Fewer tools means smaller attack surface
+- 🎯 **Cleaner** = Only runtime dependencies
+- 📦 **Better caching** = Dependency layer is cached separately from code
+
+💡 **Production Tip:** Always use multi-stage builds for production images!
+
+### 🚀 Level Up: Advanced Docker Techniques
+
+#### Challenge 1: Dynamic Python Version
+
+Remember the `ARG PYTHON_VERSION=3.13` at the top of `Dockerfile_Clean`? Let's use it!
+
+We have a `.python-version` file in our project. Let's read it and pass it to Docker at build time.
+
+First, check what's in the file:
+
+```bash
+cat .python-version
+```
+
+Now build the image using this version:
+
+```bash
+docker build -t ais-smoothie-maker-clean \
+  --build-arg PYTHON_VERSION=$(cat .python-version) \
+  -f Dockerfile_Clean .
+```
+
+**What's happening here?**
+- `--build-arg PYTHON_VERSION=$(cat .python-version)` passes the Python version to the Dockerfile's ARG
+
+Check your images:
+
+💡 **Production Tip:** Using build args makes your Dockerfiles flexible and reusable across different environments!
+
+#### Challenge 2: Security Scanning with Docker Scout
+
+Docker Scout helps you find security vulnerabilities in your images.
+
+**Scan our image:**
+
+```bash
+docker scout cves ais-smoothie-maker-clean
+```
+
+You'll see a report listing:
+- 🔴 Critical vulnerabilities
+- 🟠 High severity issues
+- 🟡 Medium and low severity issues
+- The packages they come from
+
+**View a quick summary:**
+
+```bash
+docker scout quickview ais-smoothie-maker-clean
+```
+
+This gives you a high-level security score for each image.
+
+💡 **Security Tip:** Always scan your production images for vulnerabilities! Integrate Docker Scout into your CI/CD pipeline to catch issues early.
+
+**Bonus: Get recommendations**
+
+Want to see how to fix vulnerabilities?
+
+```bash
+docker scout recommendations ais-smoothie-maker-clean
+```
+
+Docker Scout will suggest:
+- Base image updates
+- Package version upgrades
+- Best practices for security
+
+🎯 **Real-world insight:** In production environments, security scanning is mandatory. 
+Multi-stage builds combined with minimal base images (like `-slim`) dramatically reduce your 
+security footprint!

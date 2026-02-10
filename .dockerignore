@@ -31,4 +31,4 @@ Thumbs.db
 
 # Docker
 .dockerignore
-Dockerfile
+Dockerfile*

@@ -6,7 +6,7 @@ FROM python:${PYTHON_VERSION}-slim AS builder
 WORKDIR /app
 
 # Install curl for uv
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl
 
 # Install uv
 RUN curl -Ls https://astral.sh/uv/install.sh | sh
@@ -30,8 +30,5 @@ COPY --from=builder /app/.venv /app/.venv
 COPY main.py ./
 COPY smoothies ./smoothies
 
-# Use the Python from .venv
-ENV PATH="/app/.venv/bin:$PATH"
-
 # Set the entrypoint
-ENTRYPOINT ["python", "main.py"]
+ENTRYPOINT ["/app/.venv/bin/python", "main.py"]
