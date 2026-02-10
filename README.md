@@ -1122,3 +1122,156 @@ Docker Scout will suggest:
 🎯 **Real-world insight:** In production environments, security scanning is mandatory. 
 Multi-stage builds combined with minimal base images (like `-slim`) dramatically reduce your 
 security footprint!
+
+## Sharing Images via GitHub Container Registry 📦
+
+Now that we have a great image, let's share it! We'll use **GitHub Container Registry (GHCR)** to store our image so others (or your production servers) can pull and use it.
+
+**👥 Pair Work Alert:** In this section, you'll work together:
+- **Student A** (the "Publisher") will push the image to GHCR
+- **Student B** (the "Consumer") will pull and run their partner's image
+
+This mirrors real-world team collaboration where developers share containers!
+
+**What is GHCR?**
+
+GitHub Container Registry is a package registry service that lets you store and manage Docker images. It's:
+- 🆓 Free for public repositories
+- 🔐 Integrated with GitHub authentication
+- 🚀 Fast and reliable
+- 📦 Lives alongside your code
+
+**Why not Docker Hub?**
+
+Both work great! We use GHCR because:
+- It's already integrated with GitHub (where your code is)
+- Same authentication tokens work for code and containers
+- Great for CI/CD workflows with GitHub Actions
+
+### Part 1: Student A - Publishing the Image 📤
+
+**Student A**, follow these steps to push your image.
+
+#### Authentication
+
+First, you need to authenticate Docker with GHCR. You'll need a GitHub Personal Access Token (PAT).
+
+**Create a Personal Access Token:**
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) (https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Give it a name like "Docker GHCR Access"
+4. Select scopes:
+   - ✅ `write:packages` (upload images)
+   - ✅ `read:packages` (download images)
+   - ✅ `delete:packages` (delete images - optional)
+5. Click "Generate token"
+6. **Copy the token immediately** (you won't see it again!)
+
+**Login to GHCR:**
+
+```bash
+echo "YOUR_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+Replace:
+- `YOUR_TOKEN` with your actual token
+- `YOUR_GITHUB_USERNAME` with your GitHub username
+
+You should see: `Login Succeeded`
+
+#### Tagging for GHCR
+
+GHCR images follow a specific naming convention:
+
+```
+ghcr.io/USERNAME/IMAGE_NAME:TAG
+```
+
+Let's tag our clean production image:
+
+```bash
+docker tag ais-smoothie-maker-clean ghcr.io/YOUR_GITHUB_USERNAME/ais-smoothie-maker:latest
+```
+
+Let's also tag it with a version:
+
+```bash
+docker tag ais-smoothie-maker-clean ghcr.io/YOUR_GITHUB_USERNAME/ais-smoothie-maker:1.0.0
+```
+
+Check your images:
+
+```bash
+docker images | grep ais-smoothie-maker
+```
+
+You should see your image with both the local name and the GHCR tags.
+
+**Tagging best practices:**
+- `latest` - Always points to the most recent stable version
+- `1.0.0` - [Semantic versioning](https://semver.org/) for specific releases
+- `main` or `dev` - Tags for specific branches
+- `pr-123` - Tags for pull requests during testing
+
+#### Pushing to GHCR
+
+Now push your image to GHCR:
+
+```bash
+docker push ghcr.io/YOUR_GITHUB_USERNAME/ais-smoothie-maker:latest
+docker push ghcr.io/YOUR_GITHUB_USERNAME/ais-smoothie-maker:1.0.0
+```
+
+You'll see Docker uploading the layers. Since both tags point to the same image, the second push will be fast 
+(layers are already uploaded).
+
+**Verify it's there:**
+
+1. Go to your GitHub profile 
+2. Click "Packages" tab (https://github.com/YOUR_GITHUB_USERNAME?tab=packages)
+3. You should see `ais-smoothie-maker`!
+
+#### Making the Package Public
+
+By default, packages are private. Let's make it public so your partner can pull it:
+
+1. On GitHub, go to your package page
+2. Click "Package settings" (bottom right)
+3. Scroll down to "Danger Zone"
+4. Click "Change visibility" → "Public"
+5. Type the package name to confirm
+
+✅ **Tell Student B:** Share your GitHub username so they can pull your image!
+
+### Part 2: Student B - Pulling and Running 📥
+
+**Student B**, now it's your turn! You'll pull and run Student A's image.
+
+Get Student A's GitHub username (let's call it `PARTNER_USERNAME`).
+
+#### Pull from GHCR
+
+Now pull Student A's image:
+
+```bash
+docker pull ghcr.io/PARTNER_USERNAME/ais-smoothie-maker:latest
+```
+
+Watch as Docker downloads the layers from GHCR! You're getting the exact same image Student A built.
+
+**Verify it's there:**
+
+```bash
+docker images | grep PARTNER_USERNAME
+```
+
+#### Run Your Partner's Image
+
+Now run it:
+
+```bash
+docker run --rm ghcr.io/PARTNER_USERNAME/ais-smoothie-maker:latest berry_blast.txt
+```
+
+🎉 You just ran your partner's containerized application! This is the power of containers - **"Build once, run anywhere"**!
