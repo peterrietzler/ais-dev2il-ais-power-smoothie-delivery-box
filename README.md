@@ -1275,3 +1275,199 @@ docker run --rm ghcr.io/PARTNER_USERNAME/ais-smoothie-maker:latest berry_blast.t
 ```
 
 🎉 You just ran your partner's containerized application! This is the power of containers - **"Build once, run anywhere"**!
+
+
+## Automating Docker Builds with CI 🤖
+
+So far, you've been building Docker images manually on your local machine. But what if you could 
+automatically build and publish a new Docker image every time you push code to GitHub? That's exactly what we'll do now!
+
+We'll extend our existing CI workflow to automatically:
+1. Build a Docker image
+2. Push it to GitHub Container Registry (GHCR)
+3. Tag it with `latest` and a version number
+
+### Open Your CI Workflow File
+
+Open `.github/workflows/ci.yml` in your editor. You should already be familiar with the contents 
+of this file from our previous sessions.
+
+### Add the `build-and-push` Job
+
+At the end of your workflow file, **after** the `scan` job, add a new job. Copy this entire block:
+
+```yaml
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [test, scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      packages: write
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read Python version
+        id: python-version
+        run: echo "version=$(cat .python-version)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile_Clean
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:v${{ github.run_number }}
+          build-args: |
+            PYTHON_VERSION=${{ steps.python-version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+```
+
+### Understanding What You Just Added
+
+Let's break down what the parts that are new to you do:
+
+#### Dependencies and Conditions
+```yaml
+  needs: [test, scan]
+  if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+```
+- `needs`: This job only runs AFTER `test` and `scan` complete successfully
+- `if`: Only run when pushing to the `main` branch (not on pull requests or other branches)
+
+**Why?** You don't want to publish every single commit from every branch. Only tested, approved 
+code from `main` should get published!
+
+#### Permissions
+```yaml
+  permissions:
+    packages: write
+```
+This gives the workflow permission to upload packages (Docker images) to GitHub Container Registry.
+
+#### Login to GHCR
+```yaml
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+```
+Logs Docker into GHCR so it can push images.
+
+`${{ github.actor }}`: Automatically uses the GitHub username that triggered the workflow
+
+`${{ secrets.GITHUB_TOKEN }}`: You are already familiar with this one!
+
+#### Read Python Version
+```yaml
+    - name: Read Python version
+      id: python-version
+      run: echo "version=$(cat .python-version)" >> $GITHUB_OUTPUT
+```
+Reads the Python version from your `.python-version` file and stores it as an output.
+
+`id: python-version` - Gives this step a unique ID so we can reference its output later
+
+`GITHUB_OUTPUT` is a special file that GitHub Actions provides to each step in a workflow. 
+It's used to pass data between steps within the same job.
+
+How it works:
+1. GitHub creates a file for each job and sets the path in the `$GITHUB_OUTPUT` environment variable
+2. You write to it using the format: `name=value`
+3. Later steps can read the values using: `${{ steps.<step-id>.outputs.<name> }}`
+
+**Why?** Our Dockerfile uses a Python version argument, and we want to use the same version we're developing with!
+
+#### Set Up Docker Buildx
+```yaml
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+```
+Sets up Docker Buildx, which is an enhanced Docker build tool. It supports:
+- Building for different platforms (AMD64, ARM, etc.)
+- Advanced caching
+- Better performance
+
+#### Step 5: Build and Push the Image
+```yaml
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ./Dockerfile_Clean
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository }}:latest
+          ghcr.io/${{ github.repository }}:v${{ github.run_number }}
+        build-args: |
+          PYTHON_VERSION=${{ steps.python-version.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+```
+
+Let's break down each parameter:
+
+- `context: .` - The build context (current directory). Same as you specified in `docker build .`
+- `file`: ./Dockerfile_Clean` - Which Dockerfile to use
+- `push: true` - Automatically push after building
+- `tags: ...:latest` - Always points to the most recent build
+- `tags: ...:v<number>` - A unique version number (GitHub automatically increments `run_number`)
+- `build-args:` - Passes the Python version to the Dockerfile
+- `cache-from/cache-to:` - Uses GitHub's cache to speed up builds
+
+**Example:** If this is your 42nd workflow run, it will create:
+- `ghcr.io/YOUR_USERNAME/YOUR_REPO:latest`
+- `ghcr.io/YOUR_USERNAME/YOUR_REPO:v42`
+
+### Commit and Push
+
+Save your changes, commit and push to GitHub.
+
+### Watch It Run! 🎬
+
+1. Go to your GitHub repository
+2. Click the **"Actions"** tab
+3. You should see your workflow running
+4. Click on the workflow run to see details
+5. Watch as it:
+   - ✅ Runs tests
+   - ✅ Runs security scans  
+   - ✅ Builds your Docker image
+   - ✅ Pushes it to GHCR
+
+This might take a few minutes (especially the first time).
+
+### Verify Your Published Image
+
+Once the workflow completes, check your packages and verify that it works using the 
+knowledge that you already gathered in the last section about GHCR.
+
+### What Just Happened?
+
+Let's trace the full journey:
+
+1. 👨‍💻 You wrote code and pushed to `main`
+2. 🤖 GitHub Actions automatically started
+3. ✅ It ran all your tests (ensuring quality)
+4. 🔒 It ran security scans (ensuring safety)  
+5. 🐳 It built a Docker image with your code
+6. 📤 It pushed the image to GHCR with proper tags
+7. 🌍 Anyone in the world can now pull and run your code!
+
+**This is the power of CI/CD!** Your code goes from your laptop to production-ready containers automatically.
