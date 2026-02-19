@@ -1470,4 +1470,526 @@ Let's trace the full journey:
 6. 📤 It pushed the image to GHCR with proper tags
 7. 🌍 Anyone in the world can now pull and run your code!
 
-**This is the power of CI/CD!** Your code goes from your laptop to production-ready containers automatically.
+## Blending Smoothies from a Cookbook 📚
+
+So far, we've been making smoothies from recipes stored locally in the `smoothies/` folder. But what if we wanted to 
+fetch recipes from a remote server? What if we had a whole **smoothie recipe database** that other people could access?
+
+Let's set up a simple recipe server that makes recipes available over HTTP!
+
+### The Manual Way: Starting a Recipe Server
+
+We have a folder called `smoothie-database/` with a recipe file `tropical_paradise.txt`. Let's make it accessible via HTTP using Python's built-in HTTP server.
+
+Run this command (it's a long one):
+
+```bash
+docker run -d \
+  --name recipe-server \
+  -v $(pwd)/smoothie-database:/recipes \
+  -w /recipes \
+  -p 8000:8000 \
+  python:3.13-slim \
+  python -m http.server 8000
+```
+
+**Let's break this down:**
+
+- `-d` → Run in detached mode (background)
+- `--name recipe-server` → Give the container a friendly name
+- `-v $(pwd)/smoothie-database:/recipes` → Mount our local `smoothie-database` folder to `/recipes` in the container (volume mount)
+- `-w /recipes` → Set the working directory to `/recipes` inside the container
+- `-p 8000:8000` → Publish port 8000 from the container to port 8000 on your host (port mapping)
+- `python:3.13-slim` → Use the Python 3.13 image
+- `python -m http.server 8000` → Start Python's built-in HTTP server on port 8000
+
+💡 **What are volumes?**
+Volumes (the `-v` flag) allow you to share files or directories between your host machine and the container. 
+They work with both directories and individual files. The syntax is `-v <host-path>:<container-path>`.
+
+💡 **What is port mapping?**
+Port mapping (the `-p` flag) makes a port inside the container accessible from outside. 
+The syntax is `-p <host-port>:<container-port>`. Without this, the container's ports are isolated and unreachable.
+
+### Test the Recipe Server
+
+Check if the server is running:
+
+```bash
+docker ps
+```
+
+You should see `recipe-server` in the list.
+
+Now open your browser and go to:
+```
+http://localhost:8000/tropical_paradise.txt
+```
+
+🎉 You should see the recipe contents! Our recipe server is working.
+
+### Blend a Smoothie from the Remote Recipe
+
+Now use the smoothie maker to fetch and blend this remote recipe:
+
+```bash
+uv run main.py http://localhost:8000/tropical_paradise.txt
+```
+
+✨ The smoothie app fetches the recipe from the HTTP server and makes the smoothie!
+
+### Stop and Clean Up
+
+When you're done, stop and remove the container:
+
+```bash
+docker stop recipe-server
+docker rm recipe-server
+```
+
+### The Problem: "README.md from Hell" 😈
+
+Look at that long `docker run` command we just used. Imagine you wanted to share this setup with 
+your teammate. You'd have to:
+
+1. Document the exact command in a README
+2. Hope they copy it correctly
+3. Hope they remember to start it every time
+4. Hope they remember to stop and clean up
+
+Now imagine you have **5 containers** to run (database, cache, API server, worker, monitoring). 
+That's 5 long commands to remember and document. If anything changes, you have to update the 
+README and tell everyone on the team.
+
+**There must be a better way!** 🤔
+
+## Welcome Docker Compose 🎼
+
+Docker Compose is a tool for defining and running multi-container applications. 
+It's **Infrastructure as Code (IaC) for Docker**!
+
+Instead of long `docker run` commands, you define everything in one YAML file 
+called `compose.yaml`. Then you can start everything with a single command: `docker compose up`.
+
+### Benefits of Docker Compose
+
+✅ **Declarative** - Define what you want, not how to do it
+✅ **Version controlled** - The compose file lives in your Git repo
+✅ **Shareable** - Your whole team uses the same configuration  
+✅ **Reproducible** - Works the same on every machine
+✅ **Simple** - One command to start, one to stop
+✅ **Infrastructure as Code** - Manage like any other code
+
+### Creating Your First Compose File
+
+Let's convert that long `docker run` command into a `compose.yaml` file.
+
+Create a file called `compose.yaml` in the root of your repository:
+
+```yaml
+services:
+  recipe-server:
+    image: python:3.13-slim
+    command: python -m http.server 8000
+    working_dir: /recipes
+    volumes:
+      - ./smoothie-database:/recipes
+    ports:
+      - "8000:8000"
+```
+
+**Let's understand this structure:**
+
+- `services:` - Defines the containers you want to run
+  - `recipe-server:` - The name of our service (you choose this)
+    - `image:` - Which Docker image to use (equivalent to `python:3.13-slim` in `docker run`)
+    - `command:` - What command to run (equivalent to the command at the end of `docker run`)
+    - `working_dir:` - Set working directory (equivalent to `-w`)
+    - `volumes:` - Mount files/directories (equivalent to `-v`)
+    - `ports:` - Publish ports (equivalent to `-p`)
+
+Notice how much cleaner this is! Each option has its own clear line, and you can read what's happening at a glance.
+
+### Start Everything with One Command
+
+Now instead of that long `docker run` command, you just type:
+
+```bash
+docker compose up
+```
+
+🚀 Docker Compose will:
+1. Create a network for your services
+2. Start the `recipe-server` service
+3. Show you the logs from all services
+
+You should see output showing the HTTP server starting and ready to serve recipes.
+
+**Test it**: Open http://localhost:8000/tropical_paradise.txt in your browser.
+
+In another terminal, make a smoothie:
+
+```bash
+uv run main.py http://localhost:8000/tropical_paradise.txt
+```
+
+✨ Perfect! It works just like before, but now we have Infrastructure as Code!
+
+### Exploring Docker Compose Commands
+
+**See running services:**
+```bash
+docker compose ps
+```
+
+**View logs from all services:**
+```bash
+docker compose logs
+```
+
+**View logs from a specific service:**
+```bash
+docker compose logs recipe-server
+```
+
+**Follow logs in real-time:**
+```bash
+docker compose logs -f
+```
+
+**Stop all services:**
+Press `Ctrl+C` in the terminal where you ran `docker compose up`, or in another terminal:
+
+```bash
+docker compose down
+```
+
+This stops and removes all containers defined in your compose file. Everything is cleaned up automatically!
+
+### Run in Background (Detached Mode)
+
+If you don't want to see the logs and want your terminal back, use the `-d` flag:
+
+```bash
+docker compose up -d
+```
+
+The services run in the background. You can still check logs with `docker compose logs`.
+
+Stop them with:
+
+```bash
+docker compose down
+```
+
+### What You've Learned
+
+🎯 You now understand:
+- Why Docker Compose exists (avoid long, manual docker run commands)
+- Infrastructure as Code principles (declarative, version-controlled configuration)
+- Basic `compose.yaml` structure (services, image, command, volumes, ports, working_dir)
+- Essential commands: `up`, `down`, `ps`, `logs`
+- How to share your entire application setup with one file
+
+### Cheat Sheet: Docker Compose Basics
+
+| Command | What It Does |
+|---------|--------------|
+| `docker compose up` | Start all services (shows logs) |
+| `docker compose up -d` | Start all services in background |
+| `docker compose down` | Stop and remove all services |
+| `docker compose ps` | List running services |
+| `docker compose logs` | Show logs from all services |
+| `docker compose logs -f` | Follow logs in real-time |
+| `docker compose logs <service>` | Show logs from one service |
+| `docker compose restart` | Restart all services |
+| `docker compose restart <service>` | Restart a specific service |
+| `docker compose build` | Build/rebuild images |
+| `docker compose exec <service> <cmd>` | Run a command in a running service |
+
+### compose.yaml Structure Reference
+
+```yaml
+services:                    # Define your containers
+  service-name:              # Choose a meaningful name
+    image: image-name:tag    # Use a pre-built image
+    # OR
+    build: ./path            # Build from a Dockerfile
+    
+    command: some command    # Override default command
+    working_dir: /path       # Set working directory
+    
+    ports:                   # Publish ports
+      - "host:container"
+    
+    volumes:                 # Mount files/directories
+      - ./host/path:/container/path
+    
+    environment:             # Set environment variables
+      - VAR=value
+    
+    depends_on:              # Start order dependencies
+      - other-service
+```
+
+💡 **Pro Tip**: The `compose.yaml` file is part of your codebase. Commit it to Git so 
+everyone on your team can use the exact same setup!
+
+## 🚀 Level Up: Advanced Docker Compose
+
+Ready to take your Docker Compose skills to the next level? These challenges will teach you 
+advanced concepts used in real-world applications.
+
+### Challenge 1: Add the Smoothie App to Compose 🥤
+
+So far, we've been running the smoothie maker manually with `uv run main.py`. But why not add it as a 
+service in our compose file? Then everything runs together with one command!
+
+**Your Mission:**
+Add a `smoothie-app` service to your `compose.yaml` that:
+1. Builds from your `Dockerfile_Clean`
+2. Depends on the `recipe-server` (starts after it)
+3. Fetches a recipe from the `recipe-server` and makes a smoothie
+
+#### Step 1: Understand Service Discovery
+
+When services run in Docker Compose, they can talk to each other using **service names as hostnames**. 
+
+Instead of `http://localhost:8000`, you can use `http://recipe-server:8000`!
+
+Docker Compose automatically creates a network where services can find each other by name. 
+It's like having a built-in DNS server for your containers.
+
+#### Step 2: Update compose.yaml
+
+Add the smoothie-app service to your `compose.yaml`:
+
+```yaml
+services:
+  recipe-server:
+    image: python:3.13-slim
+    command: python -m http.server 8000
+    working_dir: /recipes
+    volumes:
+      - ./smoothie-database:/recipes
+    ports:
+      - "8000:8000"
+  
+  smoothie-app:
+    build:
+      context: .
+      dockerfile: Dockerfile_Clean
+    command: http://recipe-server:8000/tropical_paradise.txt
+    depends_on:
+      - recipe-server
+```
+
+**Let's break down the new service:**
+
+- `build:` - Instead of using a pre-built image, we build from our Dockerfile
+  - `context: .` - Build context is the current directory
+  - `dockerfile: Dockerfile_Clean` - Which Dockerfile to use
+- `command:` - The argument to pass to our smoothie maker (the recipe URL)
+- `depends_on:` - Tells Docker Compose to start `recipe-server` before `smoothie-app`
+
+💡 **Notice**: We're using `http://recipe-server:8000` instead of `http://localhost:8000`. The service 
+name `recipe-server` is automatically resolved to the container's IP address!
+
+#### Step 3: Test It!
+
+First, make sure no services are running:
+
+```bash
+docker compose down
+```
+
+Now start everything:
+
+```bash
+docker compose up
+```
+
+🎉 You should see:
+1. Docker Compose building the smoothie-app image
+2. The recipe-server starting
+3. The smoothie-app starting and fetching the recipe
+4. A smoothie being made!
+5. The smoothie-app container exits after making the smoothie
+
+#### What You Learned
+
+✅ **Building images in Compose** - Use `build:` instead of `image:` to build from a Dockerfile
+✅ **Service dependencies** - Use `depends_on:` to control startup order
+✅ **Service discovery** - Services can talk to each other using service names as hostnames
+✅ **Multi-service orchestration** - Everything runs with one command
+
+### Challenge 2: Health Checks - Wait for Ready, Not Just Running ❤️‍🩹
+
+You might have noticed a problem: the smoothie-app starts **immediately** after the 
+recipe-server container starts. But the Python HTTP server inside takes a moment to 
+actually start listening on port 8000.
+
+If the smoothie-app tries to fetch the recipe too quickly, it might fail with "connection refused"!
+
+**The Problem with `depends_on`:**
+- `depends_on` only waits for the container to **start**
+- It doesn't wait for the service **inside** the container to be ready
+- The recipe-server container starts instantly, but the HTTP server takes ~1 second to initialize
+
+**The Solution: Health Checks**
+
+Health checks let Docker monitor whether a service is actually ready to handle requests. A service can be:
+- **Starting** - Container is running but not yet healthy
+- **Healthy** - Responding correctly to health checks
+- **Unhealthy** - Running but failing health checks
+
+#### Step 1: Add a Health Check to recipe-server
+
+Update your `compose.yaml`:
+
+```yaml
+services:
+  recipe-server:
+    image: python:3.13-slim
+    command: python -m http.server 8000
+    working_dir: /recipes
+    volumes:
+      - ./smoothie-database:/recipes
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000\")' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+  
+  smoothie-app:
+    build:
+      context: .
+      dockerfile: Dockerfile_Clean
+    command: http://recipe-server:8000/tropical_paradise.txt
+    depends_on:
+      recipe-server:
+        condition: service_healthy
+```
+
+**Let's understand the health check configuration:**
+
+- `test:` - The command to run to check health
+  - We use Python's built-in `urllib.request` (no extra tools needed!)
+  - If it succeeds (status code 200), the service is healthy
+  - If it fails, exit with code 1 (unhealthy)
+- `interval: 5s` - Run the health check every 5 seconds
+- `timeout: 3s` - Wait up to 3 seconds for the health check to complete
+- `retries: 3` - Must fail 3 times in a row to be marked unhealthy
+- `start_period: 5s` - Give the service 5 seconds to start before checking
+
+**Updated `depends_on`:**
+```yaml
+depends_on:
+  recipe-server:
+    condition: service_healthy
+```
+
+Now instead of just waiting for the container to start, we wait for it to be **healthy**!
+
+#### Step 2: Test the Health Check
+
+Start your services:
+
+```bash
+docker compose up
+```
+
+Watch what happens:
+1. recipe-server starts
+2. Docker waits for the health check to pass
+3. Only when recipe-server is **healthy** does smoothie-app start
+4. No more connection errors!
+
+#### Step 3: Monitor Health Status
+
+In another terminal, check the health status:
+
+```bash
+docker compose ps
+```
+
+You'll see something like:
+
+```
+NAME                     STATUS
+recipe-server-1          Up 10 seconds (healthy)
+smoothie-app-1           Up 5 seconds
+```
+
+Notice the `(healthy)` status!
+
+You can also see detailed health check results:
+
+```bash
+docker inspect recipe-server-1 --format='{{json .State.Health}}' | python3 -m json.tool
+```
+
+This shows all health check attempts and their results.
+
+#### Why Health Checks Matter
+
+In production systems:
+- Databases need time to initialize
+- APIs need to establish connections
+- Services need to load configuration
+
+Health checks ensure services are **actually ready**, not just started. This prevents:
+- ❌ Connection refused errors
+- ❌ Race conditions
+- ❌ Failed requests during startup
+- ❌ Cascading failures
+
+With health checks:
+- ✅ Services wait for dependencies to be truly ready
+- ✅ Load balancers route traffic only to healthy instances
+- ✅ Orchestrators restart unhealthy services automatically
+- ✅ Zero-downtime deployments
+
+#### Alternative Health Check Methods
+
+You can use different tools for health checks:
+
+**Using wget** (if available in the image):
+```yaml
+healthcheck:
+  test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000"]
+```
+
+**Using curl** (if available):
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8000"]
+```
+
+**Using Python** (our approach - no extra tools needed):
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000\")' || exit 1"]
+```
+
+💡 **Pro Tip**: Use tools that are already in your image to avoid adding extra dependencies!
+
+#### What You Learned
+
+✅ **Health checks** - Monitor when services are truly ready
+✅ **Service health conditions** - Wait for `service_healthy` instead of just `service_started`
+✅ **Health check configuration** - interval, timeout, retries, start_period
+✅ **Production patterns** - How real systems ensure reliability
+
+### 🎯 Key Takeaways
+
+You've now mastered the essential Docker Compose concepts:
+
+1. **Building images** - Use `build:` to build from Dockerfiles in your compose file
+2. **Service discovery** - Services communicate using service names as hostnames
+3. **Dependencies** - Control startup order with `depends_on:`
+4. **Health checks** - Ensure services are truly ready before depending services start
+5. **Multi-service orchestration** - Manage complex applications with a single file
