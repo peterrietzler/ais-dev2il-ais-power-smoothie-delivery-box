@@ -1276,6 +1276,32 @@ docker run --rm ghcr.io/PARTNER_USERNAME/ais-smoothie-maker:latest berry_blast.t
 
 🎉 You just ran your partner's containerized application! This is the power of containers - **"Build once, run anywhere"**!
 
+#### 🔧 Troubleshooting: Platform Compatibility Issues
+
+Sometimes you might see an error like this:
+
+```
+no matching manifest for linux/arm64/v8 in the manifest list entries
+```
+
+This happens when the Docker image was built for a different CPU architecture (e.g., AMD64/Intel) than your machine (e.g., ARM64/Apple Silicon).
+
+**Solution:**
+
+Add the `--platform linux/amd64` flag:
+
+```bash
+docker run --rm --platform linux/amd64 ghcr.io/PARTNER_USERNAME/ais-smoothie-maker:latest berry_blast.txt
+```
+
+This tells Docker to use AMD64/x86_64 architecture emulation. Docker Desktop includes 
+emulation support, so this works on Mac (Intel & Apple Silicon), Windows, and Linux 
+(though it may be slightly slower).
+
+💡 **Why does this happen?** By default, our CI pipeline builds images for the AMD64 
+architecture since that's the most common in cloud environments. To build multi-platform 
+images supporting both AMD64 and ARM64, the CI workflow would need additional configuration.
+
 
 ## Automating Docker Builds with CI 🤖
 
