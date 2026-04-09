@@ -145,8 +145,8 @@ exit
 You're back on your host machine. The busybox container is stopped.
 
 💡 What do the `-it` flags mean?
-- `-i` = Interactive (keep STDIN open)
-- `-t` = Allocate a pseudo-TTY (a terminal)
+- `-i` = Interactive (keep STDIN open - means you can still write new stuff through your terminal) 
+- `-t` = Allocate a pseudo-TTY (makes it look like you are writting in an actual terminal)
 - Together they let you interact with the container like a normal shell.
 
 #### Long-Running Containers
