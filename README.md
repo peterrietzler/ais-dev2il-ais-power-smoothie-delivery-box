@@ -403,6 +403,10 @@ docker stop ticker-1 ticker-2 ticker-3
 docker rm ticker-1 ticker-2 ticker-3
 ```
 
+> [!NOTE]
+> further filtering criterias found in [Docker docs](https://docs.docker.com/engine/cli/filter/#reference)
+
+
 #### Challenge 2: Inspect Container Details
 
 Docker stores a lot of metadata about containers. Let's dig in!
