@@ -492,6 +492,8 @@ docker rm monitor-1 monitor-2
 
 Sometimes you need to get files into or out of a container. Let's see this in action!
 
+Fork this repo and clone it to your local machine to get yourself the berryblast recipe!
+
 Start a long-running container:
 
 ```bash
