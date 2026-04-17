@@ -1955,7 +1955,7 @@ Notice the `(healthy)` status!
 You can also see detailed health check results:
 
 ```bash
-docker inspect recipe-server-1 --format='{{json .State.Health}}' | python3 -m json.tool
+docker inspect ais-dev2il-ais-power-smoothie-delivery-box-recipe-server-1 --format='{{json .State.Health}}' | uv run -m json.tool
 ```
 
 This shows all health check attempts and their results.
