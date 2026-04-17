@@ -1512,7 +1512,7 @@ Run this command (it's a long one):
 ```bash
 docker run -d \
   --name recipe-server \
-  -v $(pwd)/smoothie-database:/recipes \
+  -v ./smoothie-database:/recipes \
   -w /recipes \
   -p 8000:8000 \
   python:3.13-slim \
